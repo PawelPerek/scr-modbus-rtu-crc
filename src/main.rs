@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::num::ParseIntError;
+use eframe::egui;
 
 mod crc;
 mod lut;
