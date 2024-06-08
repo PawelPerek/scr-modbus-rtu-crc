@@ -6,13 +6,12 @@ mod crc;
 mod lut;
 
 fn main() -> Result<(), eframe::Error> {
-    env_logger::init();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([700.0, 380.0]),
         ..Default::default()
     };
     eframe::run_native(
-        "CRC Paweł Perek",
+        "Modbus CRC Paweł Perek",
         options,
         Box::new(|cc| {
             cc.egui_ctx.set_zoom_factor(2.0);
@@ -49,7 +48,7 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Licznik CRC");
+            ui.heading("Licznik CRC (Modbus)");
             ui.horizontal(|ui| {
                 let name_label = ui.label("Bajty: ");
                 ui.text_edit_singleline(&mut self.input)
@@ -66,16 +65,21 @@ impl eframe::App for MyApp {
 
             if ui.button("Oblicz").clicked() {
                 let clean_input = self.input.replace(" ", "");
-                
-                if clean_input.len() % 2 != 0 {
-                    self.error = Some("Nieparzysta liczba bajtów".to_string());
+
+                if clean_input.len() > 256 * 2 {
+                    self.error = Some("Maksymalna długość ciągu to 256 bajtów".to_string());
                     return;
                 }
 
                 let iterations = self.iterations;
-                let parse_result: Result<Vec<usize>, ParseIntError> = (0..clean_input.len())
-                    .step_by(2)
-                    .map(|i| usize::from_str_radix(&clean_input[i..i + 2], 16))
+                let parse_result: Result<Vec<usize>, ParseIntError> = clean_input
+                    .as_str()
+                    .as_bytes()
+                    .chunks(2)
+                    .map(|chunk| {
+                        let chunk_str = std::str::from_utf8(chunk).unwrap();
+                        usize::from_str_radix(chunk_str, 16)
+                    })
                     .collect();
 
                 if parse_result.is_err() {
@@ -85,13 +89,7 @@ impl eframe::App for MyApp {
 
                 let bytes = parse_result.unwrap();
 
-                let mut output: usize;
-
-                let single_iteration_timer = std::time::Instant::now();
-
-                output = crc::CRC::new().calculate(&bytes);
-                
-                self.iteration_time = Some(single_iteration_timer.elapsed());
+                let mut output: usize = 0;
 
                 let execution_timer = std::time::Instant::now();
 
@@ -100,6 +98,7 @@ impl eframe::App for MyApp {
                 }
 
                 self.execution_time = Some(execution_timer.elapsed());
+                self.iteration_time = Some(self.execution_time.unwrap() / iterations as u32);
                 self.result = Some(format!("{:04X}", output));
                 self.error = None;
             }
